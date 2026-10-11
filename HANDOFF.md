@@ -9,14 +9,18 @@ Starting point for anyone (human or AI) picking this up. Read **§0** first.
 **The feature compiles and cuts patterns in Onshape. Paste 4 (2026-10-11) had equal-sided
 hexagons, Tip angle, and blind pockets on curved faces in it; the owner showed Tip angle −30°
 on a wall face (so the nested precondition `if` and `hexTipAngle` work) and rejected the look:
-stretched, not a honeycomb hexagon. Through all and Blind on a curved face have not been
-reported either way.**
+stretched, not a honeycomb hexagon.**
 
 **Paste 5 (2026-10-11)** made the default hexagon the **regular** one with a corner up, at every
 limit, with Tip angle only turning it; the owner reports it "working great" (math twin: 13
 tests pass). Its roofs can exceed the overhang limit (60° on an upright wall); the info message
 says so. The stretched, always-printable hexagon is still there as a manual style. The repo's
 `src/PatternMaker.fs` is the pasted file; its STATUS comment predates this paste.
+
+**Owner, later the same day:** "tried the different cases, and it's working well." That was
+after being asked about curved faces (through all and blind pockets) in particular. No
+screenshots and no case-by-case list, so §3 is not ticked off line by line, and nothing has
+been printed yet.
 
 Also new: `docs/Printable_Pattern_User_Guide.pdf`, a one-page guide built by
 `python tools/make_user_guide.py` (pictures come from the math twin; rebuild after changes).
@@ -30,8 +34,9 @@ Also new: `docs/Printable_Pattern_User_Guide.pdf`, a one-page guide built by
   (540-case matrix: 3D overhang, rib width, edge margin). `docs/previews/` shows the output.
 - `src/PatternMaker.fs` — the feature (circles, hexagons and triangles all wired in).
 
-**Next step (owner):** report how #12–#15 (curved faces: through all, blind pockets) behave,
-then run the rest of the §3 matrix and a test print. Report Notices / screenshots; fix rounds follow.
+**Next step (owner):** a sliced test print of one upright-wall case (#2, #5 or #6), and the
+less-used §3 cases if not already tried (#9 sketch region, #10 blind from below, #11 mate
+connector / edge as print direction). Then pick from the roadmap (§5). Report Notices / screenshots; fix rounds follow.
 
 ## 1. Goal
 
@@ -97,9 +102,9 @@ See `docs/DESIGN.md` §7 (D1–D8). Owner calls I made by default and would like
 - [x] P2 FeatureScript draft: all three patterns, faces + sketch regions, through all / blind,
       both sides, print direction from plane / face / edge / mate connector
 - [x] P3 First paste: Notices clear, planar faces cut (2026-10-11)
-- [ ] P3b Cut direction + curved faces by projection: pasted, compiles; through-all result
-      on a curved face not yet reported. Blind pockets on curved faces: coded, not yet pasted
-- [ ] P4 Validation matrix (§3) + one test print of case #2/#5/#6
+- [x] P3b Cut direction, curved faces by projection, blind pockets on curved faces, regular
+      hexagons with tip angle: pasted; owner reports the cases working (2026-10-11)
+- [ ] P4 Validation matrix (§3) case by case + one test print of case #2/#5/#6
 - [ ] P5 Surface output option (extrude the kept cells as surfaces instead of cutting)
 - [ ] P6 Extras: lattice offset, clipped edge cells with roof-fixing, pointed blind-pocket
       floors, wrapping around cylindrical faces, up-to-face bounds, variable density

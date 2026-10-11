@@ -129,8 +129,14 @@ Confirmed in Rocket_Builder (same FS 3083): `newSketchOnPlane`, `skLineSegment`,
 
 Paste 3 (2026-10-11) compiled with the cut-direction code in it and cut point-up hexagons on
 the wall face; the owner then got the (since removed) "blind not supported" error on a curved
-face, so `regionSetup` reaches `cutCellsProjected` there. Whether Through all on a curved face
-cuts correctly has not been reported.
+face, so `regionSetup` reaches `cutCellsProjected` there.
+
+After paste 5 the owner reported having "tried the different cases" with it "working well",
+in answer to a question about curved faces (through all and blind pockets). So the curved-face
+calls in the table below (`evRaycast`, `evFaceTangentPlane`, `evDistance` body-to-edges, the
+all-cells `opExtrude`, `opThicken`, the pocket queries) have most likely run correctly, but
+they were not confirmed one by one. The nested precondition `if` is confirmed (Tip angle
+appeared in the dialog).
 
 Confirmed here by paste 2 (2026-10-11; wall face, triangles and hexagons, Top plane as print
 direction, through all): the file compiles, so every call below resolves, and that run used
@@ -138,7 +144,7 @@ direction, through all): the file compiles, so every call below resolves, and th
 `roundToPrecision`, `concatenateArrays`, `sort(array, fn)`, `floor`/`ceil`, the
 `BodyType.MATE_CONNECTOR` filter and the negative `isAngle` bound.
 
-**UNVERIFIED** (written but not yet run in Onshape):
+**Not individually confirmed** (see the paragraph above for what the owner has reported):
 
 | Call | Fallback if wrong |
 | --- | --- |
