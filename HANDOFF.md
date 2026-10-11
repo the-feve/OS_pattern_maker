@@ -6,7 +6,11 @@ Starting point for anyone (human or AI) picking this up. Read **§0** first.
 
 ## 0. Start here (state as of 2026-10-11, end of first session)
 
-**First full draft is written; nothing has been pasted into Onshape yet.**
+**First full draft is written. The owner has created the Onshape document (Part Studio + Feature
+Studio, 2026-10-11); paste results / Notices not reported yet.**
+
+- Onshape document: [Printable Pattern](https://cad.onshape.com/documents/00017844b4d3d67d1d1fe858/w/27782954c89d9a7430469def/e/5862b397c8f31bc376fb5c81)
+  (did `00017844b4d3d67d1d1fe858`, wid `27782954c89d9a7430469def`, eid `5862b397c8f31bc376fb5c81`)
 
 - `docs/SPEC.md` — what the feature does (from the owner's brief).
 - `docs/DESIGN.md` — the overhang math, tilings, cell fitting, API confidence list.
@@ -14,7 +18,7 @@ Starting point for anyone (human or AI) picking this up. Read **§0** first.
   (540-case matrix: 3D overhang, rib width, edge margin). `docs/previews/` shows the output.
 - `src/PatternMaker.fs` — the feature (circles, hexagons and triangles all wired in).
 
-**Next step (owner):** paste `src/PatternMaker.fs` into a new Feature Studio, check the
+**Next step (owner):** paste `src/PatternMaker.fs` into the Feature Studio, check the
 Notices panel, then run the §3 test matrix. Report Notices / screenshots; fix rounds follow.
 
 ## 1. Goal
@@ -67,7 +71,7 @@ See `docs/DESIGN.md` §7 (D1–D8). Owner calls I made by default and would like
 - [x] P1 Math twin + tests + previews
 - [x] P2 FeatureScript draft: all three patterns, faces + sketch regions, through all / blind,
       both sides, print direction from plane / face / edge / mate connector
-- [ ] P3 First paste: clear Notices (see DESIGN.md §6 for the unverified calls)
+- [ ] P3 First paste: clear Notices (document created 2026-10-11) (see DESIGN.md §6 for the unverified calls)
 - [ ] P4 Validation matrix (§3) + one test print of case #2/#5/#6
 - [ ] P5 Surface output option (extrude the kept cells as surfaces instead of cutting)
 - [ ] P6 Extras: lattice offset, clipped edge cells with roof-fixing, pointed blind-pocket

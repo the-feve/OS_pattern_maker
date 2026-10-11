@@ -30,6 +30,11 @@ Select the faces (split a face first to pattern just part of it) or sketch regio
 cell size, and set the print direction (the build plate's plane, or any planar face, edge or mate
 connector). The info line under the feature reports how many cells were cut and which shapes it chose.
 
+## Onshape document
+
+[Printable Pattern](https://cad.onshape.com/documents/00017844b4d3d67d1d1fe858/w/27782954c89d9a7430469def/e/5862b397c8f31bc376fb5c81)
+— test Part Studio and the Feature Studio this repo's `src/PatternMaker.fs` is pasted into.
+
 ## Status
 
 First draft (2026-10-11), not yet pasted into Onshape. See [`HANDOFF.md`](HANDOFF.md) for state and
