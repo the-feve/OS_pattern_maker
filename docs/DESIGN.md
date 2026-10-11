@@ -54,16 +54,18 @@ tiles tessellate, every rib is at least `rib` wide.
 | Pattern | Tile | Lattice | Hole(s) per lattice point |
 | --- | --- | --- | --- |
 | Hexagon, flat top | regular hex, normals 30°+60°k | `t1 = v0+v1, t2 = v1+v2` (any centrally symmetric hexagon tiles by these) | hex at r |
-| Hexagon, pointy | normals 0, 90∓θ, 180, 270∓θ (θ = roof slope, 30° = regular) | same | hex at r |
+| Hexagon, point up | `pointyHex`: six equal sides, vertical sides at ±r, roofs sloped θ; tile = the same hexagon with every edge moved out rib/2; both turned by the tip angle. Default style: θ = 30° (regular) always. Stretched style: θ = max(30°, θmin + tip) | same | hex of width 2r |
 | Circles / teardrops | pointy hex with roof θ = max(30°, cap slope) | `t1 = v5+v0, t2 = v0+v1` | circle or teardrop at r (fits inside the hex at r) |
 | Triangles | up triangle, normals 90∓θ, 270 (θ = 60° or steeper) + its point reflection | `t1 = B−A, t2 = C−A` | up triangle at r; down triangle (point reflection) at offset `B+C`, optionally peaked |
 
 **Teardrop:** circle + two lines tangent at slope θ meeting at `r / cos θ` above the centre;
 "flat" variant cuts the cap where it is `maxBridge` wide (never lower than the tangent points).
 
-**Peaked roof (`roofClip`):** clip a convex polygon by two half-planes sloped θ meeting at
-its top-centre, then optionally flat at `maxBridge` width. Used on down triangles: keeps ~60%
-of the hole versus ~15% for simply truncating it to the bridge width.
+**Roof (`roofClip`):** cut the top corners off a convex polygon with two half-planes sloped θ.
+Used on down triangles, which keep their full height (same as the up triangles). When bridging
+is possible, `maxBridge` of the top edge stays flat and the roof lines fall away from its two
+ends; otherwise they meet in a peak at the top-centre. For a 5 mm cell at θ = 45° the hole
+keeps 93% of its area with a 5 mm flat and 63% with a peak.
 
 All holes are convex, so there are no ceiling "valleys" (a valley starts material mid-air).
 
@@ -80,9 +82,37 @@ resulting sketch region is kept if
 Exact for any shape, including teardrops and concave regions. The Python twin does the same
 with polygon distances.
 
+### 4a. Cut direction and curved faces (`regionSetup`, `cutCellsProjected`)
+
+The path above (`cutCellsOnFace`) is used when a planar region is cut along its own normal. A
+curved face, or a cut direction that is not the face normal, goes through `cutCellsProjected`:
+
+- Hole axis `N` = the cut direction, turned to point out of the face (face normal at its
+  parameter centre), so "into the part" stays the default. All the overhang math is unchanged:
+  holes are prisms along `N`, whatever the face does.
+- The sketch plane is square to `N` and touches the face's extreme on the side the cut starts
+  from (`evBox3d` z-range in the pattern frame).
+- A candidate is drawn only if rays along `N` hit the face from its centre and from every
+  `outlineSamples` point (outline corners pushed `edgeMargin` out; mirrored and tested in
+  Python). This is what keeps cells off a silhouette, where there is no edge to measure to.
+- All drawn cells are extruded, then each tool body must be `edgeMargin` from the face's edges
+  (`evDistance(body, edges)`: a prism along `N` is as far from an edge as its shadow is).
+  Failing bodies are deleted.
+- Blind depth (`pocketTools`): the face is thickened along its normals into a skin as thick as
+  the depth, twice. Skin A minus the prisms is the skin with holes; skin B minus that leaves
+  only the pockets, which become the tools. The owner suggested extruding up to an offset
+  surface; this gives the same floor but cannot fail when a cell near the edge of the face
+  hangs past the (smaller) offset surface. `opBoolean` `SUBTRACT_COMPLEMENT` might do it with
+  one skin; untested, so two plain subtractions are used.
+
+Known gaps: ray samples are corners only, so a silhouette with a sharp inward notch narrower
+than a cell could slip through; and an inner loop lying wholly inside one cell, further than
+the margin from its walls, is only caught if `evDistance` treats a solid body as filled.
+
 ## 5. Cut
 
 - Direction: `−N` by default (into the part for a face; for a sketch drawn on a part's face).
+  `N` is the region normal, or the selected cut direction (§4a).
 - Through all: depth = diagonal of the box around targets + regions, + 1 mm. The tool starts
   `0.05 mm` outside the face so its cap is never coplanar with the face.
 - Blind: `depth`. Both sides: same each way.
@@ -97,18 +127,32 @@ Confirmed in Rocket_Builder (same FS 3083): `newSketchOnPlane`, `skLineSegment`,
 `opBoolean` SUBTRACTION with targets, `opDeleteBodies`, `qSketchFilter`, `qAdjacent`,
 `evPlane`, `reportFeatureInfo/Warning`, `try silent {}`.
 
-**UNVERIFIED** (first suspects if the Notices panel complains):
+Paste 3 (2026-10-11) compiled with the cut-direction code in it and cut point-up hexagons on
+the wall face; the owner then got the (since removed) "blind not supported" error on a curved
+face, so `regionSetup` reaches `cutCellsProjected` there. Whether Through all on a curved face
+cuts correctly has not been reported.
+
+Confirmed here by paste 2 (2026-10-11; wall face, triangles and hexagons, Top plane as print
+direction, through all): the file compiles, so every call below resolves, and that run used
+`evBox3d` with `cSys`, `evDistance` with a point side, `evApproximateCentroid`,
+`roundToPrecision`, `concatenateArrays`, `sort(array, fn)`, `floor`/`ceil`, the
+`BodyType.MATE_CONNECTOR` filter and the negative `isAngle` bound.
+
+**UNVERIFIED** (written but not yet run in Onshape):
 
 | Call | Fallback if wrong |
 | --- | --- |
-| `evBox3d(..., "cSys" : coordSystem(...))` returning the box in that frame | transform `evBox3d` corners of a world box, or sample `evVertexPoint`s |
-| `evDistance` with a `Vector` point as one side | build an `opPoint` per centroid (slower) |
-| `evApproximateCentroid` | `evDistance` side0 point from the lattice centre (holes are centred) |
-| `qAllModifiableSolidBodies()` | `qBodyType(qEverything(EntityType.BODY), BodyType.SOLID)` |
-| `evMateConnector(...).zAxis`, `evAxis(...).direction` | each wrapped in `try silent`; remove the branch |
-| `roundToPrecision`, `concatenateArrays`, `sort(array, fn)`, `qNothing()`, `floor`/`ceil` | hand-rolled helpers |
-| Filter `BodyType.MATE_CONNECTOR` inside an `||` filter expression | drop mate connectors from the filter |
-| `isAngle` with a negative lower bound (`[-180, 0, 180]`) | `[0, 0, 360]` |
+| `evRaycast(context, { "entities", "ray" : line(...), "closest" : true })` returning `[]` on a miss (signature checked against the std source; `includeIntersectionsBehind` cannot be combined with `closest`) | `evDistance` from an `extend`ed line to the face |
+| `evFaceTangentPlane(..., "parameter" : vector(0.5, 0.5)).normal` pointing out of the solid | wrapped in `try silent`; only sets which way "into the part" is |
+| `evDistance` between a solid tool body and edges (0 when an edge passes through it) | distance to `qOwnedByBody(body, EntityType.FACE)` |
+| `opExtrude` of all `qSketchRegion` cells giving one body per cell | extrude per cell |
+| Region filter `EntityType.FACE && BodyType.SOLID` accepting curved faces | add `GeometryType` alternatives |
+| `qAllModifiableSolidBodies()` (sketch-region path, not yet exercised) | `qBodyType(qEverything(EntityType.BODY), BodyType.SOLID)` |
+| `evMateConnector(...).zAxis`, `evAxis(...).direction` (not yet exercised) | each wrapped in `try silent`; remove the branch |
+| `opThicken(context, id, { "entities" : face, "thickness1" : outward, "thickness2" : inward })` on a face of a solid (fields checked against the std source; `thickness1` runs along the face normal) | `opExtractSurface` with `offset`, then thicken the sheet |
+| `qCreatedBy(skinB)` + `qCreatedBy(pockets boolean)` finding every pocket after skin B is cut into many pieces | `qSplitBy`, or collect bodies by position |
+| Precondition `if (definition.hexStyle != HexStyle.FLAT_TOP)` nested in the pattern `if` | show Tip angle for every hexagon style |
+| Blind depth on a planar face, both sides, opposite direction, `qNothing()` (not yet exercised) | — |
 
 ## 7. Decisions (and why)
 
@@ -119,6 +163,10 @@ Confirmed in Rocket_Builder (same FS 3083): `newSketchOnPlane`, `skLineSegment`,
 | D3 | Whole cells only | Clipped cells get the region edge as a ceiling — the main way a "printable" pattern would fail. |
 | D4 | Plain circles OK when the too-flat cap chord ≤ max bridge | Matches the owner's "circles tend to work fine"; it's a heuristic (the cap is curved, not flat), documented. |
 | D5 | Bridges only with a horizontal hole axis (±1°) | Elsewhere a flat ceiling is a sloped overhang, which slicers won't bridge. |
-| D6 | Down triangles get a peaked roof, not truncation | Keeps far more open area; no bridge needed at all. |
+| D6 | Down triangles keep full height: top corners cut at θmin, with a flat of max bridge width where bridging is possible, else a peak | Owner request 2026-10-11 (the first draft cut the peak down to the bridge width, leaving short triangles). Keeps the most open area and matches the up triangles' height. |
 | D7 | Pattern angle only when orientation is free | Any rotation would break the overhang rule otherwise. |
 | D8 | Python twin of the math | FeatureScript has no local interpreter; this keeps the API budget for real-geometry checks. |
+| D9 | Hexagons default to the **regular** hexagon with a corner up, at every limit; the tip angle only turns it | Owner 2026-10-11, after seeing the stretched version: "a symmetric hex, all angles and lengths the same (like honeycomb)", and no stretching when turned. This is the only default that can break the overhang limit (60° on an upright wall), so the info message states the overhang and the limit. No warning: it is the owner's chosen default and would be yellow on every use. |
+| D12 | "Point up, stretched to print" stays as a manual style | Six equal sides, roofs at the limit, and the tip angle steepens them further. Keeps a hexagon that is guaranteed to print; the test matrix runs hexagons in this style. Warns when it would need more than 80°. |
+| D10 | Curved faces are cut along one selected direction (projection), not wrapped | Owner request 2026-10-11. Keeps holes prismatic, so the same overhang math holds. Wrapping is a later item. |
+| D11 | Blind depth on the projected path = pockets cut from a thickened skin of the face | Owner request 2026-10-11 (floor = face offset by the depth). Thicken + two subtractions instead of up-to-surface: see §4a. |

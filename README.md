@@ -1,6 +1,6 @@
 # Printable Pattern (Onshape FeatureScript)
 
-A custom Onshape feature that cuts **circle, hexagon or triangle** hole patterns into a planar face or
+A custom Onshape feature that cuts **circle, hexagon or triangle** hole patterns into a face or
 sketch region, with every hole shaped to print on an FDM printer **without supports**.
 
 You give it the print direction, a max overhang angle (default 45°) and a max bridge width; it picks
@@ -8,15 +8,17 @@ hole shapes that respect them:
 
 | Holes vs print axis | Circles | Hexagons | Triangles |
 | --- | --- | --- | --- |
-| Along the print axis (plate printed flat) | circles | regular honeycomb | full isogrid |
-| Across it (wall printed upright) | circles, or teardrops with a bridge-width flat top | flat-top honeycomb if the top edge bridges, else pointy | down triangles get a peaked roof |
-| Tilted beyond the overhang limit | pointed teardrops | stretched pointy hexagons | steeper sides, peaked down triangles |
+| Along the print axis (plate printed flat) | circles | regular hexagons, corner up (always the default; a stretched style respects the limit) | full isogrid |
+| Across it (wall printed upright) | circles, or teardrops with a bridge-width flat top | regular, corner up: roofs overhang 60° | down triangles keep their height: top corners cut, flat top of the bridge width |
+| Tilted beyond the overhang limit | pointed teardrops | regular, corner up | steeper sides, peaked down triangles |
 
 Print up = red arrow, 45° overhang, 4 mm max bridge. Left: holes tilted 65° from the print axis (teardrops). Middle and right: wall printed upright.
 
 <img src="docs/previews/circles_tilted.svg" width="32%"> <img src="docs/previews/hexagons_side.svg" width="32%"> <img src="docs/previews/triangles_side.svg" width="32%">
 
 More in [`docs/previews/`](docs/previews/README.md) (rendered from the same math the feature uses).
+One-page user guide: [`docs/Printable_Pattern_User_Guide.pdf`](docs/Printable_Pattern_User_Guide.pdf)
+(rebuild with `python tools/make_user_guide.py`).
 
 ## Install
 
@@ -28,7 +30,7 @@ More in [`docs/previews/`](docs/previews/README.md) (rendered from the same math
 
 Select the faces (split a face first to pattern just part of it) or sketch regions, pick a pattern and
 cell size, and set the print direction (the build plate's plane, or any planar face, edge or mate
-connector). The info line under the feature reports how many cells were cut and which shapes it chose.
+connector). For a curved face, also pick a cut direction: the holes go straight through along it. The info line under the feature reports how many cells were cut and which shapes it chose.
 
 ## Onshape document
 
@@ -37,7 +39,7 @@ connector). The info line under the feature reports how many cells were cut and 
 
 ## Status
 
-First draft (2026-10-11), not yet pasted into Onshape. See [`HANDOFF.md`](HANDOFF.md) for state and
+Working in Onshape on planar faces (2026-10-11); curved faces are new and untested. See [`HANDOFF.md`](HANDOFF.md) for state and
 the validation plan, [`docs/SPEC.md`](docs/SPEC.md) and [`docs/DESIGN.md`](docs/DESIGN.md) for details.
 
 ## Repo layout
@@ -45,5 +47,5 @@ the validation plan, [`docs/SPEC.md`](docs/SPEC.md) and [`docs/DESIGN.md`](docs/
 | Path | What |
 | --- | --- |
 | `src/PatternMaker.fs` | The feature |
-| `tools/` | Python twin of the pattern math, its tests, and the preview renderer |
+| `tools/` | Python twin of the pattern math, its tests, the preview renderer and the user-guide builder |
 | `docs/` | Spec, design, previews |

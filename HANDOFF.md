@@ -6,8 +6,20 @@ Starting point for anyone (human or AI) picking this up. Read **§0** first.
 
 ## 0. Start here (state as of 2026-10-11, end of first session)
 
-**First full draft is written. The owner has created the Onshape document (Part Studio + Feature
-Studio, 2026-10-11); paste results / Notices not reported yet.**
+**The feature compiles and cuts patterns in Onshape. Paste 4 (2026-10-11) had equal-sided
+hexagons, Tip angle, and blind pockets on curved faces in it; the owner showed Tip angle −30°
+on a wall face (so the nested precondition `if` and `hexTipAngle` work) and rejected the look:
+stretched, not a honeycomb hexagon. Through all and Blind on a curved face have not been
+reported either way.**
+
+**Paste 5 (2026-10-11)** made the default hexagon the **regular** one with a corner up, at every
+limit, with Tip angle only turning it; the owner reports it "working great" (math twin: 13
+tests pass). Its roofs can exceed the overhang limit (60° on an upright wall); the info message
+says so. The stretched, always-printable hexagon is still there as a manual style. The repo's
+`src/PatternMaker.fs` is the pasted file; its STATUS comment predates this paste.
+
+Also new: `docs/Printable_Pattern_User_Guide.pdf`, a one-page guide built by
+`python tools/make_user_guide.py` (pictures come from the math twin; rebuild after changes).
 
 - Onshape document: [Printable Pattern](https://cad.onshape.com/documents/00017844b4d3d67d1d1fe858/w/27782954c89d9a7430469def/e/5862b397c8f31bc376fb5c81)
   (did `00017844b4d3d67d1d1fe858`, wid `27782954c89d9a7430469def`, eid `5862b397c8f31bc376fb5c81`)
@@ -18,8 +30,8 @@ Studio, 2026-10-11); paste results / Notices not reported yet.**
   (540-case matrix: 3D overhang, rib width, edge margin). `docs/previews/` shows the output.
 - `src/PatternMaker.fs` — the feature (circles, hexagons and triangles all wired in).
 
-**Next step (owner):** paste `src/PatternMaker.fs` into the Feature Studio, check the
-Notices panel, then run the §3 test matrix. Report Notices / screenshots; fix rounds follow.
+**Next step (owner):** report how #12–#15 (curved faces: through all, blind pockets) behave,
+then run the rest of the §3 matrix and a test print. Report Notices / screenshots; fix rounds follow.
 
 ## 1. Goal
 
@@ -44,13 +56,19 @@ Make a test Part Studio with a 80 × 60 × 10 mm block and a 80 × 10 × 60 mm w
 | 2 | Wall's big face, circles defaults | Top plane | Horizontal holes, plain circles (cap 3.5 mm ≤ 5) |
 | 3 | Same, cell 10 mm | Top plane | Flat-top teardrops |
 | 4 | Same, max bridge 0 | Top plane | Pointed teardrops |
-| 5 | Wall face, hexagons, cell 6 / 12 | Top plane | Flat-top honeycomb / pointy 45° hexes |
-| 6 | Wall face, triangles | Top plane | Isogrid, down triangles peaked with 5 mm flat |
+| 5 | Wall face, hexagons, cell 6 / 12 | Top plane | Regular corner-up hexes; info line says "roofs overhang 60 deg, limit 45". Stretched style: taller, 45° roofs. Flat top style: honeycomb, with a warning at cell 12 |
+| 6 | Wall face, triangles | Top plane | Isogrid, down triangles as tall as the up ones, 5 mm flat top with 45° corner cuts |
 | 7 | Wall tilted 30° (rotate the wall), any pattern | Top plane | Pointed shapes, "no bridging" |
 | 8 | Split face (Split → face by sketch), circles | Top plane | Only the split area patterned, margin respected |
 | 9 | Sketch region on the block's top face | Top plane | Cuts the block |
 | 10 | Blind 3 mm from the block's bottom face | Top plane | Warning about pocket roofs as bridges |
 | 11 | Print direction = mate connector / edge, flip on | — | Info line names the source; pattern flips its "up" |
+
+| 12 | Curved face (e.g. a filleted or lofted panel), cut direction = a plane roughly facing it | Top plane | Holes straight through along the direction, whole cells only, margin from the face edges |
+| 13 | Outer face of a tube, cut direction square to its axis | Top plane | Holes through both walls, none on the tube's side silhouette |
+| 14 | Curved face, no cut direction | — | Clear error asking for one |
+| 15 | Curved face, Blind 2 mm | Top plane | Separate pockets, each 2 mm deep measured square to the surface, floor following the face |
+| 16 | Wall face, hexagons, Tip angle 15° / −30° | Top plane | Regular hexes turned, not stretched; info line says "tip turned 15 deg". At ±30° they sit flat-topped |
 
 For #2–#7 also slice once and look at the slicer's overhang/support preview.
 
@@ -64,6 +82,13 @@ See `docs/DESIGN.md` §7 (D1–D8). Owner calls I made by default and would like
 4. **Plain circles count as printable** when the flat-ish top chord is ≤ max bridge.
 5. Defaults: cell 5 mm, rib 1.6 mm, edge margin 2 mm, max bridge 5 mm, overhang 45°.
 6. Pattern is centred on the region's bounding box; no offset control yet.
+7. The default hexagon is regular, corner up, in every case; cell size is its width. It does
+   not respect the overhang limit (owner's choice): the info line reports the overhang.
+8. On a curved face, Through all cuts everything behind the face along the cut direction (a
+   tube gets both walls). Blind depth there is measured along the face normal, not along the
+   cut direction.
+9. Tip angle only turns the regular hexagon. In the stretched style it also steepens the
+   roofs by the same angle, to stay within the overhang limit.
 
 ## 5. Status / roadmap
 
@@ -71,11 +96,13 @@ See `docs/DESIGN.md` §7 (D1–D8). Owner calls I made by default and would like
 - [x] P1 Math twin + tests + previews
 - [x] P2 FeatureScript draft: all three patterns, faces + sketch regions, through all / blind,
       both sides, print direction from plane / face / edge / mate connector
-- [ ] P3 First paste: clear Notices (document created 2026-10-11) (see DESIGN.md §6 for the unverified calls)
+- [x] P3 First paste: Notices clear, planar faces cut (2026-10-11)
+- [ ] P3b Cut direction + curved faces by projection: pasted, compiles; through-all result
+      on a curved face not yet reported. Blind pockets on curved faces: coded, not yet pasted
 - [ ] P4 Validation matrix (§3) + one test print of case #2/#5/#6
 - [ ] P5 Surface output option (extrude the kept cells as surfaces instead of cutting)
 - [ ] P6 Extras: lattice offset, clipped edge cells with roof-fixing, pointed blind-pocket
-      floors, cylindrical faces, up-to-face bounds, variable density
+      floors, wrapping around cylindrical faces, up-to-face bounds, variable density
 - [ ] P7 Publish (icon, description) and log any gotchas in the reference repo
 
 ## 6. Open questions
@@ -91,4 +118,5 @@ See `docs/DESIGN.md` §7 (D1–D8). Owner calls I made by default and would like
 | `tools/pattern_math.py` | Python twin of the pure math |
 | `tools/test_pattern_math.py` | `python3 -m unittest tools.test_pattern_math` (~100 s) |
 | `tools/render_previews.py` | Regenerates `docs/previews/*.svg` |
+| `tools/make_user_guide.py` | Builds `docs/Printable_Pattern_User_Guide.pdf` (needs Chrome or Edge) |
 | `docs/SPEC.md`, `docs/DESIGN.md` | Spec and design |

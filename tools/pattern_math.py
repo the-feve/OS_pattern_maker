@@ -123,6 +123,26 @@ def hex_normals(flat_top, theta_deg):
     return [0, 90 - t, 90 + t, 180, 270 - t, 270 + t]
 
 
+def pointy_hex(r, theta_deg, grow=0.0):
+    """Point-up hexagon with six equal sides: vertical sides at x = +-r, roof
+    and floor edges sloped theta from horizontal (theta = 30 is the regular
+    hexagon). grow then moves every edge outward by that much, which gives
+    the rib centre-line tile (no longer equal-sided). Vertex order matches
+    circumscribed(hex_normals(False, theta), ...)."""
+    th = math.radians(theta_deg)
+    d_side = r + grow
+    d_roof = r * math.sin(th) + r / 2 + grow
+    y1 = (d_roof - d_side * math.sin(th)) / math.cos(th)
+    ya = d_roof / math.cos(th)
+    return [(d_side, y1), (0.0, ya), (-d_side, y1), (-d_side, -y1), (0.0, -ya), (d_side, -y1)]
+
+
+def rotate_pts(pts, angle_deg):
+    """Points turned counter-clockwise about the origin."""
+    c, s = math.cos(math.radians(angle_deg)), math.sin(math.radians(angle_deg))
+    return [(x * c - y * s, x * s + y * c) for x, y in pts]
+
+
 def tri_up_normals(theta_deg):
     t = theta_deg
     return [90 - t, 90 + t, 270]
@@ -145,19 +165,27 @@ def clip_halfplane(pts, nx, ny, c):
 
 
 def roof_clip(pts, roof_deg, flat_width=None):
-    """Replace a convex polygon's top with a peaked roof: two lines sloped
-    roof_deg from horizontal meeting at the top of the polygon above its
-    x-centre. flat_width (optional) cuts the peak flat where it is that wide."""
+    """Cut the top corners off a convex polygon with two roof lines sloped
+    roof_deg from horizontal. The polygon keeps its full height: flat_width of
+    its top stays flat (centred, a bridge) and the roof lines fall away from
+    the two ends of that flat. Without flat_width they meet in a peak at the
+    top centre."""
     xs = [p[0] for p in pts]
     px = (min(xs) + max(xs)) / 2
     py = max(p[1] for p in pts)
     th = math.radians(roof_deg)
     sn, cs = math.sin(th), math.cos(th)
-    out = clip_halfplane(pts, sn, cs, px * sn + py * cs)
-    out = clip_halfplane(out, -sn, cs, -px * sn + py * cs)
-    if flat_width is not None:
-        out = clip_halfplane(out, 0.0, 1.0, py - 0.5 * flat_width * math.tan(th))
-    return out
+    half = 0.5 * flat_width if flat_width is not None else 0.0
+    out = clip_halfplane(pts, sn, cs, (px + half) * sn + py * cs)
+    out = clip_halfplane(out, -sn, cs, -(px - half) * sn + py * cs)
+    return drop_duplicates(out)
+
+
+def drop_duplicates(pts, tol=1e-9):
+    """Remove points that coincide with the one before them (cyclic). The two
+    roof lines of a peak both cut the top edge at the same point."""
+    n = len(pts)
+    return [pts[i] for i in range(n) if math.dist(pts[i], pts[i - 1]) > tol]
 
 
 def poly_shape(pts):
@@ -229,6 +257,37 @@ def outline(shape, n=96):
     return pts
 
 
+def outline_samples(shape, margin):
+    """Points that must all land on a face for a hole to count as whole there:
+    the centre, then the outline's corners pushed `margin` further out (for a
+    round outline, points around it at r + margin). Each pushed point is
+    exactly `margin` from the outline."""
+    out = [(0.0, 0.0)]
+    k = shape["kind"]
+    if k == "poly":
+        for x, y in shape["pts"]:
+            f = 1 + margin / math.hypot(x, y)
+            out.append((x * f, y * f))
+        return out
+    r = shape["r"] + margin
+    if k == "circle":
+        angles = [math.radians(45 * i) for i in range(8)]
+    else:
+        th = shape["theta"]
+        angles = [math.pi / 2 + th] + [math.radians(a) for a in (180, 225, 270, 315, 0)] + [math.pi / 2 - th]
+    for a in angles:
+        out.append((r * math.cos(a), r * math.sin(a)))
+    if k == "teardrop":
+        if shape["y_clip"] is None:
+            out.append((0.0, shape["apex"] + margin))
+        elif shape["y_clip"] - shape["y_tan"] > 1e-9:
+            yc = shape["y_clip"]
+            half = (shape["apex"] - yc) / math.tan(shape["theta"])
+            f = 1 + margin / math.hypot(half, yc)
+            out += [(half * f, yc * f), (-half * f, yc * f)]
+    return out
+
+
 def bound_radius(shape):
     k = shape["kind"]
     if k == "poly":
@@ -246,7 +305,7 @@ def bound_radius(shape):
 CIRCLES, HEXAGONS, TRIANGLES = "circles", "hexagons", "triangles"
 
 
-def build_cell_set(kind, cell, rib, frame, max_bridge, style="auto"):
+def build_cell_set(kind, cell, rib, frame, max_bridge, style="auto", tip_angle_deg=0.0):
     """Lattice (t1, t2) and the holes placed per lattice point.
 
     Returns {"t1", "t2", "holes": [(offset, shape)], "label", "warnings"}.
@@ -292,19 +351,43 @@ def build_cell_set(kind, cell, rib, frame, max_bridge, style="auto"):
     if kind == HEXAGONS:
         top_edge = 2 * r * math.tan(math.radians(30))
         flat_ok = (not constrained) or (tmin <= 60 + 1e-9 and bridges and top_edge <= max_bridge + 1e-9)
-        if style == "auto":
-            style = "flat_top" if flat_ok else "pointy"
         if style == "flat_top":
             if not flat_ok:
                 warnings.append("flat-top hexagon ceilings exceed the overhang/bridge limits")
             normals = hex_normals(True, 0)
             label = "hexagons (flat top)"
+            tile = circumscribed(normals, R)
+            hole = poly_shape(circumscribed(normals, r))
         else:
-            th = max(30.0, tmin) if constrained else 30.0
-            normals = hex_normals(False, th)
-            label = "hexagons (pointy, %.0f deg roof)" % th
-        tile = circumscribed(normals, R)
-        hole = poly_shape(circumscribed(normals, r))
+            lean = abs(tip_angle_deg)
+            turned = "" if lean < 1e-9 else ", tip turned %.0f deg" % tip_angle_deg
+            if style == "pointy":
+                # Stretched to print: six equal sides, roofs at the limit.
+                # Turning the tip leans one roof flatter, so the roofs are
+                # steepened by the same angle.
+                th = max(30.0, tmin + lean) if constrained else 30.0
+                if th > 80.0:
+                    th = 80.0
+                    warnings.append("tip angle too large for the overhang limit: hexagon roofs exceed it")
+                label = "hexagons (point up, stretched, %.0f deg roof%s)" % (th, turned)
+            else:
+                # Auto: the regular hexagon with a corner up, whatever the
+                # limits (owner's choice); the tip angle only turns it. The
+                # label says when its flattest roof is over the limit.
+                th = 30.0
+                note = ""
+                flattest = 30.0 - min(lean, 30.0)
+                if constrained and flattest < 0.5:
+                    if not flat_ok:
+                        note = "; flat top exceeds the bridge/overhang limits"
+                elif constrained and flattest < tmin - 1e-6:
+                    s = frame["s"]
+                    note = "; roofs overhang %.0f deg, limit %.0f" % (
+                        math.degrees(math.asin(min(1.0, s * math.cos(math.radians(flattest))))),
+                        math.degrees(math.asin(min(1.0, s * math.cos(frame["theta_min"])))))
+                label = "hexagons (point up%s%s)" % (turned, note)
+            tile = rotate_pts(pointy_hex(r, th, rib / 2.0), tip_angle_deg)
+            hole = poly_shape(rotate_pts(pointy_hex(r, th), tip_angle_deg))
         t1 = add(tile[0], tile[1])
         t2 = add(tile[1], tile[2])
         return {"t1": t1, "t2": t2, "holes": [((0.0, 0.0), hole)], "label": label, "warnings": warnings}
@@ -331,7 +414,7 @@ def build_cell_set(kind, cell, rib, frame, max_bridge, style="auto"):
             label = "triangles"
         elif style == "peaked":
             roof = tmin if constrained else 45.0
-            flat = max_bridge if (bridges and max_bridge > MIN_FEATURE) else None
+            flat = min(max_bridge, top_w) if (bridges and max_bridge > MIN_FEATURE) else None
             holes.append((down_off, poly_shape(roof_clip(down, roof, flat))))
             label = "triangles (down ones %.0f deg roof%s)" % (roof, "" if flat is None else ", %.1f mm flat" % flat)
         else:

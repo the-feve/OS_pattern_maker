@@ -71,10 +71,10 @@ class FrameTests(unittest.TestCase):
 
 
 class PatternTests(unittest.TestCase):
-    def run_case(self, kind, cell, rib, beta, max_oh, max_b, loops, az=0.0, style="auto", expect_ok=True):
+    def run_case(self, kind, cell, rib, beta, max_oh, max_b, loops, az=0.0, style="auto", expect_ok=True, tip=0.0):
         N = (0.0, 1.0, 0.0)
         frame = pm.pattern_frame(N, z_at(beta, N, az), max_oh, pattern_angle_deg=17.0)
-        cs = pm.build_cell_set(kind, cell, rib, frame, max_b, style)
+        cs = pm.build_cell_set(kind, cell, rib, frame, max_b, style, tip)
         margin = rib
         placed = pm.place_holes(cs, loops, margin)
         ctx = "%s cell=%s rib=%s beta=%s oh=%s bridge=%s -> %s" % (kind, cell, rib, beta, max_oh, max_b, cs["label"])
@@ -120,7 +120,9 @@ class PatternTests(unittest.TestCase):
                     for max_b in (0.0, 3.0, 6.0):
                         for cell, rib in ((4.0, 1.2), (7.0, 2.0)):
                             for loops in (RECT, L_WITH_HOLE):
-                                self.run_case(kind, cell, rib, beta, max_oh, max_b, loops)
+                                # Hexagons: "pointy" is the style that promises to print.
+                                style = "pointy" if kind == pm.HEXAGONS else "auto"
+                                self.run_case(kind, cell, rib, beta, max_oh, max_b, loops, style=style)
                                 n += 1
         self.assertEqual(n, 540)
 
@@ -128,7 +130,7 @@ class PatternTests(unittest.TestCase):
         # Tilting the print axis toward any in-plane direction must still be printable.
         for az in (0, 45, 135, 250):
             for kind in (pm.CIRCLES, pm.HEXAGONS, pm.TRIANGLES):
-                self.run_case(kind, 5.0, 1.5, 90, 45, 4.0, RECT, az=az)
+                self.run_case(kind, 5.0, 1.5, 90, 45, 4.0, RECT, az=az, style="pointy" if kind == pm.HEXAGONS else "auto")
 
     def test_expected_choices(self):
         N = (0.0, 1.0, 0.0)
@@ -140,9 +142,13 @@ class PatternTests(unittest.TestCase):
         self.assertTrue(lab(pm.CIRCLES, side, 10, 5).startswith("flat teardrops"))
         self.assertTrue(lab(pm.CIRCLES, tilt, 5, 5).startswith("teardrops"))
         self.assertEqual(lab(pm.CIRCLES, flat, 10, 0), "circles")
-        self.assertEqual(lab(pm.HEXAGONS, side, 5, 5), "hexagons (flat top)")
-        self.assertEqual(lab(pm.HEXAGONS, side, 12, 5), "hexagons (pointy, 45 deg roof)")
-        self.assertEqual(lab(pm.HEXAGONS, flat, 12, 0), "hexagons (flat top)")
+        self.assertEqual(lab(pm.HEXAGONS, side, 5, 5), "hexagons (point up; roofs overhang 60 deg, limit 45)")
+        self.assertEqual(lab(pm.HEXAGONS, flat, 12, 0), "hexagons (point up)")
+        side60 = pm.pattern_frame(N, z_at(90, N), 60)
+        self.assertEqual(lab(pm.HEXAGONS, side60, 5, 5), "hexagons (point up)")  # 60 deg limit: regular prints
+        stretched = lambda f, cell: pm.build_cell_set(pm.HEXAGONS, cell, 1.5, f, 5, "pointy")["label"]
+        self.assertEqual(stretched(side, 12), "hexagons (point up, stretched, 45 deg roof)")
+        self.assertEqual(stretched(flat, 12), "hexagons (point up, stretched, 30 deg roof)")
         self.assertEqual(lab(pm.TRIANGLES, side, 5, 5), "triangles (down ones 45 deg roof, 5.0 mm flat)")
         self.assertTrue(lab(pm.TRIANGLES, tilt, 5, 5).startswith("triangles (down ones 41 deg roof)"))
         self.assertEqual(lab(pm.TRIANGLES, flat, 5, 0), "triangles")
@@ -167,8 +173,85 @@ class PatternTests(unittest.TestCase):
         self.assertTrue(pm.check_printable(regular_pointy, side, 8))  # 30 deg roof < 45 needed
         self.assertTrue(pm.check_printable(pm.outline(pm.circle_shape(6), 180), side, 3))
 
+    def test_down_triangles_keep_height(self):
+        # Roofed down triangles are as tall as the up ones; the flat is max bridge wide.
+        N = (0.0, 1.0, 0.0)
+        side = pm.pattern_frame(N, z_at(90, N), 45)
+        tilt = pm.pattern_frame(N, z_at(70, N), 45)
+        height = lambda pts: max(y for _, y in pts) - min(y for _, y in pts)
+        for frame, bridge in ((side, 5.0), (side, 7.0), (side, 0.0), (tilt, 5.0)):
+            up, down = [h for _, h in pm.build_cell_set(pm.TRIANGLES, 5, 1.6, frame, bridge)["holes"]]
+            self.assertAlmostEqual(height(down["pts"]), height(up["pts"]), 9)
+            top = max(y for _, y in down["pts"])
+            flat = [x for x, y in down["pts"] if abs(y - top) < 1e-9]
+            want = bridge if (frame is side and bridge > 0) else 0.0
+            self.assertAlmostEqual(max(flat) - min(flat), want, 9)
+            self.assertEqual(pm.check_printable(down["pts"], frame, bridge), [])
+
+    def test_outline_samples_sit_at_margin(self):
+        # Every sample but the centre is exactly `margin` outside the hole outline.
+        N = (0.0, 1.0, 0.0)
+        margin = 2.0
+        for beta in (0, 50, 70, 90):
+            frame = pm.pattern_frame(N, z_at(beta, N), 45)
+            for kind in (pm.CIRCLES, pm.HEXAGONS, pm.TRIANGLES):
+                for cell, bridge in ((5.0, 5.0), (10.0, 5.0), (10.0, 0.0)):
+                    for _, h in pm.build_cell_set(kind, cell, 1.6, frame, bridge)["holes"]:
+                        samples = pm.outline_samples(h, margin)
+                        self.assertEqual(samples[0], (0.0, 0.0))
+                        poly = pm.outline(h, 1440)
+                        for p in samples[1:]:
+                            self.assertFalse(pm.point_in_polygon(p, poly))
+                            self.assertAlmostEqual(pm.dist_to_loops(p, [poly]), margin, 3)
+
+    def test_pointy_hex_equal_sides(self):
+        # Point-up hexagons have six equal sides at any roof angle, are `cell`
+        # wide, and are regular at 30 deg.
+        for th in (30, 38.7, 45, 60, 75):
+            pts = pm.pointy_hex(3.0, th)
+            sides = [math.dist(pts[i], pts[(i + 1) % 6]) for i in range(6)]
+            for s in sides:
+                self.assertAlmostEqual(s, sides[0], 9)
+            self.assertAlmostEqual(max(x for x, _ in pts) - min(x for x, _ in pts), 6.0, 9)
+            roof = math.degrees(math.atan2(pts[1][1] - pts[0][1], pts[0][0] - pts[1][0]))
+            self.assertAlmostEqual(roof, th, 9)
+        regular = pm.circumscribed(pm.hex_normals(False, 30), 3.0)
+        for a, b in zip(pm.pointy_hex(3.0, 30), regular):
+            self.assertAlmostEqual(math.dist(a, b), 0, 9)
+
+    def test_hex_tip_angle(self):
+        # Stretched style: a turned tip still prints, keeps ribs and margin, and says so.
+        for tip in (-30, -12, 8, 20, 30):
+            for beta in (0, 70, 90):
+                cs, _ = self.run_case(pm.HEXAGONS, 6.0, 1.6, beta, 45, 4.0, RECT, tip=tip, style="pointy")
+                self.assertIn("tip turned %d deg" % tip, cs["label"])
+        N = (0.0, 1.0, 0.0)
+        steep = pm.pattern_frame(N, z_at(90, N), 20)  # roofs need 70 deg; +20 cannot be met
+        self.assertTrue(pm.build_cell_set(pm.HEXAGONS, 6, 1.6, steep, 4, "pointy", 20)["warnings"])
+
+    def test_auto_hex_is_regular_and_only_turns(self):
+        # Auto hexagons are the regular hexagon at every limit and tip angle:
+        # six equal sides, 120 deg corners, never stretched; ribs and margin hold.
+        N = (0.0, 1.0, 0.0)
+        for beta, max_oh in ((0, 45), (90, 45), (90, 30), (65, 45)):
+            for tip in (0, -30, -12, 15, 30):
+                cs, placed = self.run_case(pm.HEXAGONS, 6.0, 1.6, beta, max_oh, 4.0, RECT, tip=tip, expect_ok=False)
+                self.assertEqual(cs["warnings"], [])
+                pts = cs["holes"][0][1]["pts"]
+                sides = [math.dist(pts[i], pts[(i + 1) % 6]) for i in range(6)]
+                for i in range(6):
+                    self.assertAlmostEqual(sides[i], 2 * 3.0 * math.tan(math.radians(30)), 9)
+                    self.assertAlmostEqual(math.hypot(*pts[i]), 3.0 / math.cos(math.radians(30)), 9)
+                tip_dir = math.degrees(math.atan2(pts[1][1], pts[1][0])) - 90
+                self.assertAlmostEqual(tip_dir, tip, 9)
+        side = pm.pattern_frame(N, z_at(90, N), 45)
+        lab = lambda tip, bridge: pm.build_cell_set(pm.HEXAGONS, 6, 1.6, side, bridge, "auto", tip)["label"]
+        self.assertEqual(lab(15, 4), "hexagons (point up, tip turned 15 deg; roofs overhang 75 deg, limit 45)")
+        self.assertEqual(lab(30, 4), "hexagons (point up, tip turned 30 deg)")  # now flat top, a 3.5 mm bridge
+        self.assertEqual(lab(30, 2), "hexagons (point up, tip turned 30 deg; flat top exceeds the bridge/overhang limits)")
+
     def test_hex_tiles_uniform_rib(self):
-        # Regular flat-top honeycomb: neighbour holes exactly `rib` apart.
+        # Regular honeycomb: neighbour holes exactly `rib` apart.
         N = (0.0, 1.0, 0.0)
         f = pm.pattern_frame(N, z_at(0, N), 45)
         cs, placed = self.run_case(pm.HEXAGONS, 6.0, 1.5, 0, 45, 0, RECT)
