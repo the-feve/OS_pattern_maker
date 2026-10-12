@@ -22,6 +22,23 @@ after being asked about curved faces (through all and blind pockets) in particul
 screenshots and no case-by-case list, so §3 is not ticked off line by line, and nothing has
 been printed yet.
 
+**Second feature, Knurl (2026-10-11): third draft written, NOT YET PASTED. This is the open
+item.** `src/Knurl.fs` is a separate feature for its own Feature Studio (owner's call; it is
+"Feature Studio 1" in the Onshape document). It cuts diamond, helical or straight V grooves
+that wrap around cylindrical faces. History, design and open risks: `docs/KNURL.md` §0, §2, §5.
+
+- Draft 1 (true helical sweeps) compiled but never finished regenerating.
+- Draft 2 (straight V prisms cut off at their rows) regenerated on the owner's Ø25 × 250 mm rod
+  (pitch 5, depth 1: 1856 prisms) but the owner saw steps where prisms met ("the grooves aren't
+  continuous"). Cause: a V along a helix twists, a straight prism cannot.
+- Draft 3 (in the repo now): on a shaft each prism runs on until it leaves the surface, so the
+  groove is a union of overlapping prisms. The math twin simulates this and finds no steps
+  (`tools/test_knurl_math.py`, 10 tests pass). Bores still have small steps.
+
+**Next step for the knurl (owner):** paste `src/Knurl.fs` over "Feature Studio 1" and regenerate
+the same rod. Report (1) whether the steps are gone, (2) how long it takes, since the prisms now
+overlap and the cut may be slower, (3) any Notices. It is not in the user guide yet.
+
 Also new: `docs/Printable_Pattern_User_Guide.pdf`, a one-page guide built by
 `python tools/make_user_guide.py` (pictures come from the math twin; rebuild after changes).
 
@@ -122,6 +139,9 @@ See `docs/DESIGN.md` §7 (D1–D8). Owner calls I made by default and would like
 | `src/PatternMaker.fs` | The feature (paste into a Feature Studio) |
 | `tools/pattern_math.py` | Python twin of the pure math |
 | `tools/test_pattern_math.py` | `python3 -m unittest tools.test_pattern_math` (~100 s) |
+| `src/Knurl.fs` | The Knurl feature (paste into a second Feature Studio) |
+| `tools/knurl_math.py`, `tools/test_knurl_math.py` | Knurl math twin and its tests |
+| `docs/KNURL.md` | Knurl spec, design and unverified calls |
 | `tools/render_previews.py` | Regenerates `docs/previews/*.svg` |
 | `tools/make_user_guide.py` | Builds `docs/Printable_Pattern_User_Guide.pdf` (needs Chrome or Edge) |
 | `docs/SPEC.md`, `docs/DESIGN.md` | Spec and design |

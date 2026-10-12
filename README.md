@@ -20,6 +20,12 @@ More in [`docs/previews/`](docs/previews/README.md) (rendered from the same math
 One-page user guide: [`docs/Printable_Pattern_User_Guide.pdf`](docs/Printable_Pattern_User_Guide.pdf)
 (rebuild with `python tools/make_user_guide.py`).
 
+## Knurl (second feature)
+
+`src/Knurl.fs` is a separate feature for its own Feature Studio: diamond, helical or straight V
+grooves that wrap around a cylindrical face, on a shaft or in a bore. First draft, not yet tried
+in Onshape. See [`docs/KNURL.md`](docs/KNURL.md).
+
 ## Install
 
 1. In an Onshape document, create a Feature Studio and paste in `src/PatternMaker.fs`.
